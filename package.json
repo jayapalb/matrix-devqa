@@ -1,0 +1,23 @@
+{
+  "name": "matrix-or-qa",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Touchstone QA host for the Matrix Plus simulated OR — the multi-case, chaos-woven procedure campaign.",
+  "scripts": {
+    "qa": "playwright test -c .qa/playwright.config.mjs",
+    "qa:campaign": "playwright test -c .qa/playwright.config.mjs --grep @campaign",
+    "qa:smoke": "playwright test -c .qa/playwright.config.mjs --grep @smoke",
+    "qa:doctor": "node node_modules/touchstone/cli.mjs doctor",
+    "qa:shell": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @shellui",
+    "qa:planner": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep \"@a11y|@ux\"",
+    "qa:fuzz": "QA_EPHEMERAL_USERDATA=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @fuzz"
+  },
+  "dependencies": {
+    "touchstone": "github:jayapalb/touchstone#v0.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "electron": "^38.4.0"
+  }
+}

@@ -1,0 +1,288 @@
+# Matrix Plus — dockerized dev environment (TODO #7 / matrix-devqa).
+#
+# One `docker compose up` brings the whole platform up on a shared network so
+# every tier can talk to every other by container DNS. Matrix Shell runs on
+# the laptop (Electron) and points at these services — see README.
+#
+#   Cloud/control:  planner-api · planner-web · ehr-adapter · device-registry
+#                   audit-service · app-store · arthrex-surgeon (cloud app)
+#   Adapters:       barco-agent (mock NMS)
+#   Devices:        light · recorder · display(windows) · pump · shaver
+#                   — each a real @matrix/agent-sdk agent, mock hardware.
+#
+# Ports are overridable via .env. Room-scoped agents mount OR-03's room-auth.
+
+name: matrix-plus-dev
+
+x-agent-env: &agent-env
+  DISCOVERY_URL: http://device-registry:4430
+  BROKER_URL: mqtt://mqtt-broker:1883
+  MATRIX_ALLOW_UNSIGNED: "false"
+  # Simulated hardware presents as healthy drivers — consumers (planner /
+  # shell / registry) never learn real-vs-sim from the protocol surface.
+  MATRIX_SIM_HARDWARE: "true"
+
+networks:
+  matrix-net:
+    driver: bridge
+
+volumes:
+  planner-data:
+  audit-data:
+  registry-data:
+
+services:
+  # ---- Room MQTT broker (Greengrass-style presence + state) ------------------
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports: ["${MQTT_PORT:-1883}:1883"]
+    networks: [matrix-net]
+
+  # ---- Vendor simulators (dev-tooling: the "hardware" beneath the agents) ---
+  nexxis-sim:
+    build:
+      context: ./sim/nexxis-sim
+      dockerfile: ../../docker/node-service.Dockerfile
+    environment:
+      PORT: "4599"
+    ports: ["${NEXXIS_SIM_PORT:-4599}:4599"]
+    networks: [matrix-net]
+
+  # ---- Cloud / control plane -------------------------------------------------
+  device-registry:
+    build:
+      context: ../matrix-device-registry
+      dockerfile: ../matrix-devqa/docker/node-service.Dockerfile
+    environment:
+      MATRIX_DEVICE_REGISTRY_PORT: "4430"
+      MATRIX_DEVICE_REGISTRY_DATA_DIR: /data
+      MATRIX_REGISTRY_TRUST: permissive
+      BROKER_URL: mqtt://mqtt-broker:1883
+    volumes:
+      - registry-data:/data
+    ports: ["${REGISTRY_PORT:-4430}:4430"]
+    depends_on: [mqtt-broker]
+    networks: [matrix-net]
+
+  audit-service:
+    build:
+      context: ../matrix-audit-service
+      dockerfile: ../matrix-devqa/docker/node-service.Dockerfile
+    environment:
+      AUDIT_SERVICE_PORT: "4460"
+      AUDIT_DATA_DIR: /data
+    volumes:
+      - audit-data:/data
+    ports: ["${AUDIT_PORT:-4460}:4460"]
+    networks: [matrix-net]
+
+  ehr-adapter:
+    build:
+      context: ../matrix-planner
+      dockerfile: ../matrix-devqa/docker/planner.Dockerfile
+    command: ["npm", "run", "dev", "--workspace", "@matrix/ehr-adapter"]
+    environment:
+      EHR_ADAPTER_PORT: "4600"
+    ports: ["${EHR_PORT:-4600}:4600"]
+    networks: [matrix-net]
+
+  planner-api:
+    build:
+      context: ../matrix-planner
+      dockerfile: ../matrix-devqa/docker/planner.Dockerfile
+    command: ["sh", "-c", "npm run seed --workspace @matrix/api 2>/dev/null || true; npm run dev --workspace @matrix/api"]
+    environment:
+      MATRIX_PLANNER_PORT: "4500"
+      MATRIX_PLANNER_DB: /data/db.json
+      EHR_ADAPTER_URL: http://ehr-adapter:4600
+      MATRIX_DEVICE_REGISTRY_URL: http://device-registry:4430
+      MATRIX_AUDIT_URL: http://audit-service:4460
+      # Cryptographic seam (SOW §1.3): the rig planner SIGNS snapshot/2
+      # envelopes; the shell pins this key and runs required trust.
+      MATRIX_PLANNER_SIGNING_KEY_FILE: /certs/planner-signing-key.pem
+      MATRIX_PLANNER_SIGNING_KEY_ID: or-fleet-1
+    volumes:
+      - planner-data:/data
+      - ./certs/planner-signing-key.pem:/certs/planner-signing-key.pem:ro
+    ports: ["${PLANNER_API_PORT:-4500}:4500"]
+    depends_on: [ehr-adapter, device-registry, audit-service]
+    networks: [matrix-net]
+
+  planner-web:
+    build:
+      context: ../matrix-planner
+      dockerfile: ../matrix-devqa/docker/planner.Dockerfile
+    command: ["npm", "run", "dev", "--workspace", "@matrix/web", "--", "--host", "0.0.0.0", "--port", "5500"]
+    environment:
+      VITE_API_PROXY: http://planner-api:4500
+    ports: ["${PLANNER_WEB_PORT:-5500}:5500"]
+    depends_on: [planner-api]
+    networks: [matrix-net]
+
+  app-store:
+    build:
+      context: ../matrix-app-store
+      dockerfile: ../matrix-devqa/docker/node-service.Dockerfile
+    environment:
+      PORT: "4410"
+    ports: ["${APPSTORE_PORT:-4410}:4410"]
+    networks: [matrix-net]
+
+  # ---- Cloud apps ------------------------------------------------------------
+  arthrex-surgeon:
+    build:
+      context: ../arthrex-surgeon
+      dockerfile: ../matrix-devqa/docker/node-service.Dockerfile
+    environment:
+      ARTHREX_SURGEON_PORT: "4402"
+    ports: ["${ARTHREX_PORT:-4402}:4402"]
+    networks: [matrix-net]
+
+  # ---- Vendor adapter --------------------------------------------------------
+  barco-agent:
+    build: &agents-build
+      context: ../matrix-device-agents
+      dockerfile: ../matrix-devqa/docker/agents.Dockerfile
+    command: ["node", "barco-agent/server.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: barco.nexxis-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4550
+      PORT: "4550"
+      # The agent drives the vendor simulator as a REAL upstream — it is
+      # genuinely healthy; real-vs-sim exists only in this file.
+      ROUTING_API_URL: http://nexxis-sim:4599
+      BARCO_EVENTS_URL: ws://nexxis-sim:4599/events
+      # Commissioned endpoints (matrix.deviceRegistration/1 barco block): decoders →
+      # planner displayIds, encoders → planner sourceId. Vendor ids stay agent-side.
+      BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display 55", "displayIds": ["disp.or3.main", "disp.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display 32", "displayIds": ["disp.or3.aux", "disp.sec"], "slots": ["slot-1", "slot-2"]}, {"id": "sink-nurse", "label": "Nurse Documentation Display", "displayIds": ["disp.or3.nurse"], "slots": ["slot-1"]}, {"id": "sink-boom", "label": "Anesthesia Boom Display", "displayIds": ["disp.or3.boom"], "slots": ["slot-1"]}]'
+      BARCO_AUDIO_SINKS: '[{"id":"asink-room","label":"Room Speakers","sinkId":"aud.or3.speakers"},{"id":"asink-nurse","label":"Nurse Station Speaker","sinkId":"aud.or3.nurse"}]'
+      BARCO_AUDIO_SOURCES: '[{"id":"aenc-music","label":"Surgeon Music Player","sourceId":"aud.src.or3.music","kind":"music"},{"id":"aenc-alerts","label":"Voice Alerts Channel","sourceId":"aud.src.or3.alerts","kind":"voice-alert"},{"id":"aenc-mic","label":"Room Microphone","sourceId":"aud.src.or3.mic","kind":"mic"}]'
+      BARCO_INTEROR_ROOMS: '[{"id":"OR-01","name":"OR-01 Ortho"},{"id":"OR-02","name":"OR-02 General"}]'
+      BARCO_VIDEO_SOURCES: '[{"id": "enc-endo", "label": "Endoscope Camera 4K", "sourceId": "src.or3.endoscope"}, {"id": "enc-roomcam", "label": "Room Camera PTZ", "sourceId": "src.or3.roomcam"}, {"id": "enc-carm", "label": "C-arm Fluoro", "sourceId": "src.or3.carm"}, {"id": "enc-us", "label": "Ultrasound", "sourceId": "src.or3.ultrasound"}, {"id": "enc-pacs", "label": "PACS Workstation", "sourceId": "src.or3.pacs"}, {"id": "enc-vitals", "label": "Vitals Monitor", "sourceId": "src.or3.vitals"}, {"id": "enc-endo", "label": "Endoscope (plan alias)", "sourceId": "src.scope"}, {"id": "enc-roomcam", "label": "Room Camera (plan alias)", "sourceId": "src.roomcam"}, {"id": "enc-pacs", "label": "PACS (plan alias)", "sourceId": "src.pacs"}, {"id": "enc-pc", "label": "OR PC Composite Feed", "sourceId": "src.compose"}]'
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${BARCO_PORT:-4550}:4550"]
+    depends_on: [device-registry, nexxis-sim]
+    networks: [matrix-net]
+
+  # ---- Devices (each a real SDK agent, mock hardware) ------------------------
+  light-agent:
+    build: *agents-build
+    command: ["node", "light-controller-agent/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.lights-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4520
+      PORT: "4520"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${LIGHT_PORT:-4520}:4520"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  recorder-agent:
+    build: *agents-build
+    command: ["node", "recorder-agent/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.recorder-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4530
+      PORT: "4530"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${RECORDER_PORT:-4530}:4530"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  display-agent:
+    build: *agents-build
+    command: ["node", "windows-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.windows-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4540
+      PORT: "4540"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${DISPLAY_PORT:-4540}:4540"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  pump-agent:
+    build: *agents-build
+    command: ["node", "pump-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.pump-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4560
+      PORT: "4560"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${PUMP_PORT:-4560}:4560"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  shaver-agent:
+    build: *agents-build
+    command: ["node", "shaver-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.shaver-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4570
+      PORT: "4570"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${SHAVER_PORT:-4570}:4570"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  audio-agent:
+    build: *agents-build
+    command: ["node", "audio-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.audio-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4590
+      PORT: "4590"
+      AUDIO_MUSIC_FEED: aud.src.or3.music
+      AUDIO_ALERTS_FEED: aud.src.or3.alerts
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${AUDIO_PORT:-4590}:4590"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  # ---- Roaming cart (multi-room; touchscreen at /cart) ----------------------
+  cart-agent:
+    build: *agents-build
+    command: ["node", "cart-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.cart-7
+      MATRIX_MOUNT_MODE: cart
+      ROOM_AUTH_PACKAGE_FILE: /certs/cart-room-auth-package.json
+      AGENT_URL: http://localhost:4580
+      PORT: "4580"
+    volumes:
+      - ./certs/cart/cart-room-auth-package.json:/certs/cart-room-auth-package.json:ro
+    ports: ["${CART_PORT:-4580}:4580"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
