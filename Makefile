@@ -67,8 +67,11 @@ campaign: ## Touchstone: simulate a DAY of cases with woven chaos, collect data 
 campaign-install: ## One-time: install the touchstone QA host deps
 	npm --prefix . install
 
+fleet-update: ## Fleet OTA: dry-run vs the rig registry (needs ROOM_AUTH_FILE, UPDATE_SIGNING_KEY_FILE, ARTIFACTS_FILE; ARGS="--apply" to dispatch)
+	cd ../matrix-device-agents && REGISTRY_URL=$${REGISTRY_URL:-http://localhost:4430} SITE_ID=$${SITE_ID:-SITE-001} ROOM_ID=$${ROOM_ID:-OR-03} node fleet-updater/cli.mjs $(ARGS)
+
 test-all: ## Every unit/integration suite across the platform
-	cd ../matrix-device-agents && node --test sdk/src/*.test.mjs
+	cd ../matrix-device-agents && node --test sdk/src/*.test.mjs fleet-updater/*.test.mjs
 	cd ../matrix-device-agents/barco-agent && npm test
 	cd ../matrix-device-registry && node --test
 	cd ../matrix-planner && npm test --workspace @matrix/contract && npm test --workspace @matrix/api
