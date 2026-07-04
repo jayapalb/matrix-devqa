@@ -11,7 +11,8 @@
     "qa:doctor": "node node_modules/touchstone/cli.mjs doctor",
     "qa:shell": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @shellui",
     "qa:planner": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep \"@a11y|@ux\"",
-    "qa:fuzz": "QA_EPHEMERAL_USERDATA=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @fuzz"
+    "qa:fuzz": "QA_EPHEMERAL_USERDATA=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @fuzz",
+    "qa:soak": "QA_SOAK=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @soak"
   },
   "dependencies": {
     "touchstone": "github:jayapalb/touchstone#v0.8.1"

@@ -58,6 +58,9 @@ shell-qa: ## Touchstone electron mode: test the REAL shell window (stop `make sh
 shell-fuzz: ## Touchstone: hammer every IPC handler with hostile input on a THROWAWAY profile (stop `make shell` first)
 	npm --prefix . run qa:fuzz
 
+shell-soak: ## Touchstone: drive a compressed surgical shift and assert no view/memory leak (SOAK_CYCLES=N; stop `make shell` first)
+	npm --prefix . run qa:soak
+
 campaign: ## Touchstone: simulate a DAY of cases with woven chaos, collect data (QA_CAMPAIGN_CASES=N)
 	npm --prefix . run qa:campaign
 
