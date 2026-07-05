@@ -154,6 +154,19 @@ hospital's clinical workflow and surgical time-out; Matrix supports that
 workflow by keeping the digital room aligned to the selected case, but it is
 not the clinical source of truth for patient identity or consent.
 
+**07:12 — an emergency add-on with no MWL entry yet.** A trauma case is pushed
+into OR-05 before the hospital's scheduling feed catches up. The charge nurse
+creates it directly in the Planner ("+ Add-on case" on the worklist): the
+**ehr-adapter mints it spine-safe** — an opaque `caseId` and a *generated* label
+`Add-on · OR-05 · 07:12`, with **no patient identifier ever entering from the
+browser** (the label is built at the edge, `assertSpineSafe` re-proves it). It
+appears in the worklist beside the scheduled cases and is assigned, planned, and
+published through the **identical gauntlet** — the only difference is where the
+`caseId` was born (this adapter, not the MWL/HL7 feed). Patient identity stays in
+the hospital's clinical system and is confirmed at the surgical time-out; Matrix
+shows only the spine-safe label. *(The chosen procedure's code rides along so the
+assign panel pre-selects the right procedure.)*
+
 ### 07:20 — the room enters digital prep
 
 The circulator advances the **case lifecycle**: `scheduled → room-prep`.
@@ -292,11 +305,12 @@ story — and the platform — has regressed.
 | Manual display change → divergence alarm → re-drive | barco events bridge + `route-reconciler.js` | bridge + reconciler tests |
 | Route failure → red, un-believed, retried, audited | controller failure tracking | escalation tests |
 | Demo data impossible in production | security profile + worklist gating | eradication tests |
-| Case events → per-card aggregation | caseEvent ingest + roll-up | planner tests |
+| Case events → per-card aggregation — the shell EMITS the deviation dimension, not just lifecycle/utilization: break-glass `layout-override`, route-actuation-failure `fallback-engaged`, and case `duration-overrun` (actual vs surgeon-card estimate), so Review runs on real detections, not seed data | shell `case-event-client` `buildDeviationCaseEvent` + `emitCaseDeviation` wired at the override / `onActuationFailure` / post-op sites → planner caseEvent ingest + `summarizeCaseEvents` roll-up | planner tests + shell deviation tests (8/8) + cross-repo check: shell-emitted deviations aggregate in the planner summarizer (overrun summed) |
 | Correlated audit trail | hash-chained audit + stable codes | audit service tests |
 | Shell audit forwarded to central service (correlation + local-chain anchors survive) | `audit-forwarder.js` → matrix-audit-service | audit-forwarder e2e (real service) |
-| Break-glass slot override: actor+reason recorded, phase-scoped, reconciler respects it | shell `displaySlotOverrides` + override-applied model | display-control tests; override auto-clear announced |
+| Break-glass slot override: **RBAC-gated — "who may drive the displays" comes from the room's PUBLISHED controller-role perms** (`display.route` via `authorize()`; an actor whose role lacks the `route` perm is refused + audited `DISPLAY_CONTROL_REFUSED`), then actor+reason recorded, phase-scoped, reconciler respects it | shell `displaySlotOverrides` + override-applied model + `authority-service` display policies (perm-bound) + published `controllerRoles` threaded snapshot→adapter→plan | display-control tests; **authority display-gate tests (published perms govern + override the static default + safe fallback) + cross-tier check: snapshot roles → adapter → normalize → gate**; override auto-clear announced |
 | Schedule correction: reassign → republish → worklist refresh | Planner assign/publish + shell worklist | planner assign tests; publish gauntlet tests |
+| Emergency add-on: staff mint a spine-safe case when it isn't in the MWL yet (opaque id + generated label, assign→plan→publish as normal) | ehr-adapter `POST /v1/cases` (`addons.ts`) + planner `addon-case` proxy + Worklist "+ Add-on case" | adapter addon tests (spine-safe mint, worklist merge, room filter) |
 | Device offline mid-case → graduated presence + console red + drift | registry presence/LWT + room console | registry presence/sweeper tests |
 | Cert lifecycle: revoked → refused → re-enroll; expiry auto-renews | registry CA + SDK enroll | cross-tier revoke/re-enroll e2e |
 | selectCase guard: no case switch mid-procedure | case-workspace | story-gaps tests |
