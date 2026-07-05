@@ -316,7 +316,7 @@ story — and the platform — has regressed.
 | selectCase guard: no case switch mid-procedure | case-workspace | story-gaps tests |
 | Shell in-case alerts from registry lifecycle events (this room only, recovery announced) | `device-lifecycle-watch.js` | story-gaps tests |
 | Shell restart while Planner down resumes from the verified plan cache | plan cache (save on verified apply, restore on boot-fetch failure) | story-gaps tests + `PLAN_CACHE_RESTORED` |
-| Expected-inventory publish durable + acknowledged (idempotent, restart-safe) | Planner `outbox.ts` → registry | outbox tests (retry-until-ack, latest-wins, restart) |
+| Expected-inventory publish durable + acknowledged (idempotent, restart-safe) + **AUTHENTICATED**: the outbox sends the registry write-token so the drift baseline can't be spoofed (the registry refuses an unauthenticated `expected` PUT with 401; reads stay open) | Planner `outbox.ts` (authToken) → registry `MATRIX_DEVICE_REGISTRY_TOKEN` gate | outbox tests (retry-until-ack, latest-wins, restart, **token-rides-every-delivery**) + registry-enforcement e2e (with-token 200 / without 401) |
 | **[FUTURE]** Free-text PHI content scanning at spine ingress | ehr-adapter + case-event ingest | to build + test (risk-register cite) |
 | **[FUTURE]** AI pre/in/post skills behind the gate | `matrix.skill/1` + `matrix.aiIntent/1` + gate | contracts specced; build = SOW §5 |
 | **[FUTURE]** Named human actors on every action | OIDC/JWKS (P2) | contracts exist; wiring pending |
