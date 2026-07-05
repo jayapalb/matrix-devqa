@@ -118,6 +118,9 @@ services:
     command: ["npm", "run", "dev", "--workspace", "@matrix/web", "--", "--host", "0.0.0.0", "--port", "5500"]
     environment:
       VITE_API_PROXY: http://planner-api:4500
+      # Demo EHR deep-link: the Planner hands opaque ids to the EHR's own UI, where
+      # identity resolves — never in Matrix. Unset in prod = the link stays hidden.
+      VITE_EHR_LINK_TEMPLATE: "https://example.org/ehr/patient/{ehrPatientId}?encounter={encounterId}"
     ports: ["${PLANNER_WEB_PORT:-5500}:5500"]
     depends_on: [planner-api]
     networks: [matrix-net]
