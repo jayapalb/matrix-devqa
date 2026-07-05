@@ -4,6 +4,10 @@
 COMPOSE = docker compose
 CERTS = certs/site-cert-package/operating-rooms/OR-03/room-auth.json
 
+# Load host-port overrides from .env (docker compose reads it too) so the banners
+# below print the ports you actually browse to, not the defaults.
+-include .env
+
 .PHONY: help certs up up-core up-devices down logs ps smoke shell-env clean
 
 help:
@@ -26,7 +30,7 @@ $(CERTS):
 
 up: certs
 	$(COMPOSE) up --build -d
-	@echo "up. planner-web → http://localhost:$${PLANNER_WEB_PORT:-5500}  registry console → http://localhost:$${REGISTRY_PORT:-4430}/assets/room.html?siteId=SITE-001&roomId=OR-03"
+	@echo "up. Planner UI → http://localhost:$(or $(PLANNER_WEB_PORT),5500)   registry console → http://localhost:$(or $(REGISTRY_PORT),4430)/assets/room.html?siteId=SITE-001&roomId=OR-03"
 
 up-core: certs
 	$(COMPOSE) up --build -d device-registry audit-service ehr-adapter planner-api planner-web app-store arthrex-surgeon

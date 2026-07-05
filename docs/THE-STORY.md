@@ -65,7 +65,9 @@ events, telemetry moving between Planner, Shell, and devices), which carries
 only opaque ids while real identifiers stay in the hospital's clinical
 systems. It is enforced by `assertSpineSafe` at every egress after it.
 
-The charge nurse opens the **Planner**, sees C-4412 in the worklist, and
+The charge nurse opens the **Planner**, picks **Tuesday** and **OR-03** on the
+worklist board — a day- and room-scoped, time-ordered schedule showing each
+case's care team (surgeon, circulator, scrub, anesthesia) — sees C-4412, and
 assigns it: **room OR-03 + procedure "TKA" + Dr. Rao's preference card +
 plan**. A `PlanBinding` is written; `case.assigned` is queued as the delivery
 trigger. The plan itself is the three-layer merge — the procedure's step
@@ -276,6 +278,7 @@ story — and the platform — has regressed.
 | Story beat | Component | Proof |
 |---|---|---|
 | PHI stops at the adapter edge | `ehr-adapter`, `@matrix/contract` phi | contract PHI tests; egress guards at snapshot/publish |
+| Schedule board: pick a **day + OR**, see that room's time-ordered cases with **care-team context** (surgeon/circulator/scrub/anesthesia) | Planner `Worklist` date+room filter + `ehr-adapter` staff mapping | adapter mapping/worklist tests (staff parsed, room filter); live worklist dated today |
 | Assign → PlanBinding → `case.assigned` | Planner worklist | planner API tests |
 | Card ⊕ procedure ⊕ tuning, non-destructive | `resolve.ts` | contract resolve tests |
 | Live readiness: presence/trust/**busy**/roaming | `device-telemetry.ts` + registry topology | contract telemetry tests + live smoke |
