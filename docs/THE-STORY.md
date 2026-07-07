@@ -69,7 +69,11 @@ The charge nurse opens the **Planner**, picks **Tuesday** and **OR-03** on the
 worklist board — a day- and room-scoped, time-ordered schedule showing each
 case's care team (surgeon, circulator, scrub, anesthesia) — sees C-4412, and
 assigns it: **room OR-03 + procedure "TKA" + Dr. Rao's preference card +
-plan**. A `PlanBinding` is written; `case.assigned` is queued as the delivery
+plan**. The plan is a **reusable room artifact** — she can mint a fresh one or
+attach one OR-03 already holds: when Dr. Rao's second knee of the day is
+assigned, it attaches the *same* TKA plan (two `PlanBinding`s sharing one
+plan), and unbinding one case never deletes a plan another case still uses.
+A `PlanBinding` is written; `case.assigned` is queued as the delivery
 trigger. The plan itself is the three-layer merge — the procedure's step
 baseline, Rao's card overrides (C-arm fullscreen on the main display during
 implant trial, PACS on the side display, vitals on the top bar), and the
@@ -279,7 +283,8 @@ story — and the platform — has regressed.
 |---|---|---|
 | PHI stops at the adapter edge | `ehr-adapter`, `@matrix/contract` phi | contract PHI tests; egress guards at snapshot/publish |
 | Schedule board: pick a **day + OR**, see that room's time-ordered cases with **care-team context** (surgeon/circulator/scrub/anesthesia) | Planner `Worklist` date+room filter + `ehr-adapter` staff mapping | adapter mapping/worklist tests (staff parsed, room filter); live worklist dated today |
-| Assign → PlanBinding → `case.assigned` | Planner worklist | planner API tests |
+| Assign → PlanBinding → `case.assigned` — mint a fresh plan **or attach the room's existing plan** (a plan is a reusable room artifact; many cases may bind one plan; re-assign/unbind never deletes a plan another case still references) | Planner worklist + assign route | planner API tests + attach/shared-plan e2e |
+| **[FUTURE]** Per-step intents: streaming allowance / music / alert policy authored on the procedure step; readiness ties a streaming allowance to a registry-known streaming device in the room; the shell honors the allowance per step — **WHO checkpoints refuse streaming regardless of authoring** (that floor is already enforced + tested shell-side) | contract `Step` (additive fields) + step editor + readiness + shell source policy | checkpoint-refusal tests exist (`source-orchestration`); authoring half not yet built |
 | Card ⊕ procedure ⊕ tuning, non-destructive | `resolve.ts` | contract resolve tests |
 | Procedure templates author all THREE WHO Surgical Safety Checklist checkpoints — Sign In (pre-induction), Time Out (pre-incision), Sign Out (pre-departure) — not just the middle one; each a staff-entered marker, Matrix never performs/approves any of them | contract `PhaseId`/`PHASES` + seeded procedure steps + Plan preview | contract tests; matrix-shell's case-lifecycle (`case-workspace.js`/`planner-control-model.js`) now consumes a single canonical array — `CASE_LIFECYCLE_STATES` in `electron/case-lifecycle.js` — generated (not hand-typed) via a pinned-ref codegen script (`electron/scripts/sync-contract-phases.mjs`) that fetches matrix-planner's `packages/contract/src/phases.ts` at a pinned commit SHA and regenerates the file with a "GENERATED FILE — DO NOT HAND-EDIT" header; matrix-shell's `npm run check` composite runs `sync:contract:check` to catch any hand-edit drift. **Pinned, not live**: this doesn't auto-detect matrix-planner-side phase changes — a human still has to notice `phases.ts` changed and run `npm run sync:contract -- --ref=<new-sha>` in matrix-shell (`phases.ts` now carries a comment with this exact instruction, right at the array) |
 | Live readiness: presence/trust/**busy**/roaming | `device-telemetry.ts` + registry topology | contract telemetry tests + live smoke |
