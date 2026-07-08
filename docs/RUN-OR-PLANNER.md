@@ -21,6 +21,17 @@ Then open the URL the command prints — with the checked-in example ports:
 | App store / admin | http://localhost:4410 · /admin.html |
 | Surgeons portal (Arthrex) | http://localhost:14402 |
 
+Then prove it, don't trust it:
+
+```
+make smoke-planner
+```
+
+asserts all 7 HTTP surfaces, the three adaptors online in the registry, the
+planner's live-inventory chain, and that OR-03 carries the demo rig exactly
+as specced (2× MNA-420 quad decoders · PC 4K+HD · 4 sources 2×4K+2×HD ·
+streamer). Non-zero exit = the saved setup no longer holds.
+
 Stop everything with `make down`. Full stack (shell/campaign devices too) is
 `make up`; the story gates are `make surgery` and `make chaos` (need `make up`).
 

@@ -21,6 +21,7 @@ help:
 	@echo "  make logs       tail all logs"
 	@echo "  make ps         service status"
 	@echo "  make smoke      health-check every service"
+	@echo "  make smoke-planner  assert the up-planner stack + demo rig spec"
 	@echo "  make shell-env  print the env for Matrix Shell (run on the laptop)"
 
 certs: $(CERTS)
@@ -102,6 +103,9 @@ ci: ## The CI gate: unit suites, then the full simulated OR from scratch
 
 smoke:
 	./scripts/smoke.sh
+
+smoke-planner: ## Assert the up-planner stack: HTTP surfaces, adaptors online, live inventory, demo-rig spec
+	node scripts/smoke-planner.mjs
 
 shell: ## Launch the native Electron shell wired to this stack (window opens on your screen)
 	cd ../matrix-shell && npm run dev
