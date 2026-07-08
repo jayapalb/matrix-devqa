@@ -53,6 +53,11 @@ make logs         # follow everything        make down     # stop
 Without make (any OS): `docker compose up -d --build`,
 `node scripts/run-surgery.mjs`.
 
+**Just want the OR Planner?** `make up-planner` brings up exactly the 12
+services the Planner needs (adaptors included, shell-story hardware excluded)
+— see [docs/RUN-OR-PLANNER.md](docs/RUN-OR-PLANNER.md) for the saved setup,
+URLs, and first-run steps.
+
 ## What's running (17 services)
 
 | Tier | Service (host port) |
