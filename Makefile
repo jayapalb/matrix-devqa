@@ -36,7 +36,7 @@ up-core: certs
 	$(COMPOSE) up --build -d device-registry audit-service ehr-adapter planner-api planner-web app-store arthrex-surgeon
 
 up-devices: certs
-	$(COMPOSE) up --build -d barco-agent light-agent recorder-agent display-agent pump-agent shaver-agent
+	$(COMPOSE) up --build -d barco-agent light-agent recorder-agent display-agent pump-agent shaver-agent streaming-agent
 
 down:
 	$(COMPOSE) down

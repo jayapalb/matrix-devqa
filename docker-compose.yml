@@ -176,10 +176,17 @@ services:
       # Fleet-true wall (matches the planner's authored OR-03): exactly TWO barco
       # 4K sinks, each a quad decoder — up to 4 routed sources per display.
       BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display", "displayIds": ["disp.or3.main", "disp.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display", "displayIds": ["disp.or3.aux", "disp.sec"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}]'
-      BARCO_AUDIO_SINKS: '[{"id":"asink-room","label":"Room Speakers","sinkId":"aud.or3.speakers"},{"id":"asink-nurse","label":"Nurse Station Speaker","sinkId":"aud.or3.nurse"}]'
-      BARCO_AUDIO_SOURCES: '[{"id":"aenc-music","label":"Surgeon Music Player","sourceId":"aud.src.or3.music","kind":"music"},{"id":"aenc-alerts","label":"Voice Alerts Channel","sourceId":"aud.src.or3.alerts","kind":"voice-alert"},{"id":"aenc-mic","label":"Room Microphone","sourceId":"aud.src.or3.mic","kind":"mic"}]'
+      # ONE speaker + TWO audio sources (music + voice alerts) — the rig spec.
+      BARCO_AUDIO_SINKS: '[{"id":"asink-room","label":"Room Speakers","sinkId":"aud.or3.speakers"}]'
+      BARCO_AUDIO_SOURCES: '[{"id":"aenc-music","label":"Surgeon Music Player","sourceId":"aud.src.or3.music","kind":"music"},{"id":"aenc-alerts","label":"Voice Alerts Channel","sourceId":"aud.src.or3.alerts","kind":"voice-alert"}]'
       BARCO_INTEROR_ROOMS: '[{"id":"OR-01","name":"OR-01 Ortho"},{"id":"OR-02","name":"OR-02 General"}]'
-      BARCO_VIDEO_SOURCES: '[{"id": "enc-endo", "label": "Endoscope Camera 4K", "sourceId": "src.or3.endoscope"}, {"id": "enc-roomcam", "label": "Room Camera PTZ", "sourceId": "src.or3.roomcam"}, {"id": "enc-carm", "label": "C-arm Fluoro", "sourceId": "src.or3.carm"}, {"id": "enc-us", "label": "Ultrasound", "sourceId": "src.or3.ultrasound"}, {"id": "enc-pacs", "label": "PACS Workstation", "sourceId": "src.or3.pacs"}, {"id": "enc-vitals", "label": "Vitals Monitor", "sourceId": "src.or3.vitals"}, {"id": "enc-endo", "label": "Endoscope (plan alias)", "sourceId": "src.scope"}, {"id": "enc-roomcam", "label": "Room Camera (plan alias)", "sourceId": "src.roomcam"}, {"id": "enc-pacs", "label": "PACS (plan alias)", "sourceId": "src.pacs"}, {"id": "enc-pc", "label": "OR PC Composite Feed", "sourceId": "src.compose"}]'
+      # Exactly FOUR clinical encoders (2× 4K + 2× HD, the demo rig spec) with
+      # their CANONICAL planner ids FIRST — plan-alias entries (same encoder id,
+      # alternate sourceId) follow for forward resolution only; the events-bridge
+      # reverse map is first-entry-wins. enc-pc is NOT a clinical source: it is
+      # the PC adaptor's composited feed INTO the wall (shell compose-intent
+      # fallback resolves src.compose) and must stay.
+      BARCO_VIDEO_SOURCES: '[{"id": "enc-endo", "label": "Endoscope Camera 4K", "sourceId": "src.or3.endoscope"}, {"id": "enc-carm", "label": "C-arm Fluoro 4K", "sourceId": "src.or3.carm"}, {"id": "enc-roomcam", "label": "Room Camera PTZ (HD)", "sourceId": "src.or3.roomcam"}, {"id": "enc-pacs", "label": "PACS Workstation (HD)", "sourceId": "src.or3.pacs"}, {"id": "enc-endo", "label": "Endoscope (plan alias)", "sourceId": "src.scope"}, {"id": "enc-roomcam", "label": "Room Camera (plan alias)", "sourceId": "src.roomcam"}, {"id": "enc-pacs", "label": "PACS (plan alias)", "sourceId": "src.pacs"}, {"id": "enc-carm", "label": "C-arm (plan alias)", "sourceId": "src.carm"}, {"id": "enc-pc", "label": "OR PC Composite Feed", "sourceId": "src.compose"}]'
     volumes:
       - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
     ports: ["${BARCO_PORT:-4550}:4550"]
@@ -200,6 +207,22 @@ services:
     volumes:
       - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
     ports: ["${LIGHT_PORT:-4520}:4520"]
+    depends_on: [device-registry]
+    networks: [matrix-net]
+
+  streaming-agent:
+    build: *agents-build
+    command: ["node", "streaming-agent-mock/agent.mjs"]
+    environment:
+      <<: *agent-env
+      DEVICE_ID: agent.streamer-or03
+      MATRIX_MOUNT_MODE: in-room
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      AGENT_URL: http://localhost:4585
+      PORT: "4585"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    ports: ["${STREAM_PORT:-4585}:4585"]
     depends_on: [device-registry]
     networks: [matrix-net]
 
