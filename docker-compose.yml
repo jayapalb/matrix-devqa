@@ -173,7 +173,9 @@ services:
       BARCO_EVENTS_URL: ws://nexxis-sim:4599/events
       # Commissioned endpoints (matrix.deviceRegistration/1 barco block): decoders →
       # planner displayIds, encoders → planner sourceId. Vendor ids stay agent-side.
-      BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display 55", "displayIds": ["disp.or3.main", "disp.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display 32", "displayIds": ["disp.or3.aux", "disp.sec"], "slots": ["slot-1", "slot-2"]}, {"id": "sink-nurse", "label": "Nurse Documentation Display", "displayIds": ["disp.or3.nurse"], "slots": ["slot-1"]}, {"id": "sink-boom", "label": "Anesthesia Boom Display", "displayIds": ["disp.or3.boom"], "slots": ["slot-1"]}]'
+      # Fleet-true wall (matches the planner's authored OR-03): exactly TWO barco
+      # 4K sinks, each a quad decoder — up to 4 routed sources per display.
+      BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display", "displayIds": ["disp.or3.main", "disp.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display", "displayIds": ["disp.or3.aux", "disp.sec"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}]'
       BARCO_AUDIO_SINKS: '[{"id":"asink-room","label":"Room Speakers","sinkId":"aud.or3.speakers"},{"id":"asink-nurse","label":"Nurse Station Speaker","sinkId":"aud.or3.nurse"}]'
       BARCO_AUDIO_SOURCES: '[{"id":"aenc-music","label":"Surgeon Music Player","sourceId":"aud.src.or3.music","kind":"music"},{"id":"aenc-alerts","label":"Voice Alerts Channel","sourceId":"aud.src.or3.alerts","kind":"voice-alert"},{"id":"aenc-mic","label":"Room Microphone","sourceId":"aud.src.or3.mic","kind":"mic"}]'
       BARCO_INTEROR_ROOMS: '[{"id":"OR-01","name":"OR-01 Ortho"},{"id":"OR-02","name":"OR-02 General"}]'
