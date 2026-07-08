@@ -14,6 +14,7 @@ help:
 	@echo "Matrix Plus dev environment"
 	@echo "  make certs      generate room-auth certs (run once)"
 	@echo "  make up         build + start the whole platform"
+	@echo "  make up-planner everything the PLANNER needs (core + barco/PC/streaming adaptors)"
 	@echo "  make up-core    control plane only (planner, registry, audit, ehr, app-store)"
 	@echo "  make up-devices device agents only (needs core up)"
 	@echo "  make down       stop + remove"
@@ -34,6 +35,16 @@ up: certs
 
 up-core: certs
 	$(COMPOSE) up --build -d device-registry audit-service ehr-adapter planner-api planner-web app-store arthrex-surgeon
+
+# Everything the PLANNER needs to fully work — nothing it doesn't:
+#   planner-api/web · ehr-adapter (dummy worklist) · device-registry (+ mqtt-broker,
+#   agent presence/LWT) · audit-service · app-store · arthrex-surgeon (Integrations)
+#   · barco-agent (+ nexxis-sim it fronts) · display-agent (PC 4K+HD, hosts apps)
+#   · streaming-agent (stream egress). The OTHER device agents (lights, recorder,
+#   pump, shaver, audio, cart) are shell-story hardware — not required here.
+up-planner: certs
+	$(COMPOSE) up --build -d mqtt-broker nexxis-sim device-registry audit-service ehr-adapter planner-api planner-web app-store arthrex-surgeon barco-agent display-agent streaming-agent
+	@echo "up. Planner UI → http://localhost:$(or $(PLANNER_WEB_PORT),5500)   registry console → http://localhost:$(or $(REGISTRY_PORT),4430)/assets/room.html?siteId=SITE-001&roomId=OR-03"
 
 up-devices: certs
 	$(COMPOSE) up --build -d barco-agent light-agent recorder-agent display-agent pump-agent shaver-agent streaming-agent
