@@ -93,6 +93,14 @@ check(shellApps.every((p) => (p.app.displayIds ?? []).length === 0), 'shell apps
 const pcApps = (live.apps ?? []).filter((p) => p.app.host === 'agent.windows-or03');
 check(pcApps.length >= 2 && pcApps.every((p) => (p.app.displayIds ?? []).length > 0), 'PC-hosted apps unchanged (windowed)');
 
+// 5b) The CONSOLE CHECK (replaces the retired roomDisplay knob): with the
+//     shell registered, planner readiness must report the room console
+//     present + online — unconditionally, from registry truth.
+const readiness = await getJson(`${PLANNER}/api/rooms/${ROOM}/readiness`);
+const consoleLive = readiness.report?.live?.console;
+check(consoleLive?.present === true && consoleLive?.state === 'online',
+  'readiness reports the room console (shell) present + online', JSON.stringify(consoleLive));
+
 // 5) The shell is NOT a headless API row — it is the commander, not commandable.
 const apiRow = (live.apis ?? []).find((a) => a.deviceId === SHELL_DEVICE_ID);
 check(!apiRow, 'shell is NOT listed as a headless device API');
