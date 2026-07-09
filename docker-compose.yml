@@ -175,7 +175,7 @@ services:
       # planner displayIds, encoders → planner sourceId. Vendor ids stay agent-side.
       # Fleet-true wall (matches the planner's authored OR-03): exactly TWO barco
       # 4K sinks, each a quad decoder — up to 4 routed sources per display.
-      BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display", "displayIds": ["disp.or3.main", "disp.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display", "displayIds": ["disp.or3.aux", "disp.sec"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}]'
+      BARCO_VIDEO_SINKS: '[{"id": "sink-main", "label": "Main Surgical Display", "displayIds": ["disp.or3.main"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}, {"id": "sink-aux", "label": "Aux Surgical Display", "displayIds": ["disp.or3.aux"], "slots": ["slot-1", "slot-2", "slot-3", "slot-4"]}]'
       # ONE speaker + TWO audio sources (music + voice alerts) — the rig spec.
       BARCO_AUDIO_SINKS: '[{"id":"asink-room","label":"Room Speakers","sinkId":"aud.or3.speakers"}]'
       BARCO_AUDIO_SOURCES: '[{"id":"aenc-music","label":"Surgeon Music Player","sourceId":"aud.src.or3.music","kind":"music"},{"id":"aenc-alerts","label":"Voice Alerts Channel","sourceId":"aud.src.or3.alerts","kind":"voice-alert"}]'
@@ -186,7 +186,7 @@ services:
       # reverse map is first-entry-wins. enc-pc is NOT a clinical source: it is
       # the PC adaptor's composited feed INTO the wall (shell compose-intent
       # fallback resolves src.compose) and must stay.
-      BARCO_VIDEO_SOURCES: '[{"id": "enc-endo", "label": "Endoscope Camera 4K", "sourceId": "src.or3.endoscope"}, {"id": "enc-carm", "label": "C-arm Fluoro 4K", "sourceId": "src.or3.carm"}, {"id": "enc-roomcam", "label": "Room Camera PTZ (HD)", "sourceId": "src.or3.roomcam"}, {"id": "enc-pacs", "label": "PACS Workstation (HD)", "sourceId": "src.or3.pacs"}, {"id": "enc-endo", "label": "Endoscope (plan alias)", "sourceId": "src.scope"}, {"id": "enc-roomcam", "label": "Room Camera (plan alias)", "sourceId": "src.roomcam"}, {"id": "enc-pacs", "label": "PACS (plan alias)", "sourceId": "src.pacs"}, {"id": "enc-carm", "label": "C-arm (plan alias)", "sourceId": "src.carm"}, {"id": "enc-pc", "label": "OR PC Composite Feed", "sourceId": "src.compose"}]'
+      BARCO_VIDEO_SOURCES: '[{"id": "enc-endo", "label": "Endoscope Camera 4K", "sourceId": "src.or3.endoscope"}, {"id": "enc-carm", "label": "C-arm Fluoro 4K", "sourceId": "src.or3.carm"}, {"id": "enc-roomcam", "label": "Room Camera PTZ (HD)", "sourceId": "src.or3.roomcam"}, {"id": "enc-pacs", "label": "PACS Workstation (HD)", "sourceId": "src.or3.pacs"}, {"id": "enc-pc", "label": "OR PC Composite Feed", "sourceId": "src.compose"}]'
     volumes:
       - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
     ports: ["${BARCO_PORT:-4550}:4550"]
