@@ -93,10 +93,12 @@ try {
   const pcRight = system.find((d) => d.id === 'disp.pc-right');
   check('PC adaptor displays: 4K + HD', pcLeft?.w === 3840 && pcRight?.w === 1920,
     `${pcLeft?.w ?? '?'}×${pcLeft?.h ?? '?'} + ${pcRight?.w ?? '?'}×${pcRight?.h ?? '?'}`);
-  const fourK = room.sources.filter((s) => s.format === '4K').length;
-  const hd = room.sources.filter((s) => s.format === 'HD').length;
-  check('4 clinical sources: 2×4K + 2×HD', room.sources.length === 4 && fourK === 2 && hd === 2,
-    room.sources.map((s) => `${s.id}(${s.format})`).join(' '));
+  // The guarantee is the CLINICAL FOUR exist with the specced formats — the
+  // room may legitimately hold more (imported audio channels, compose feed).
+  const CLINICAL = { 'src.or3.endoscope': '4K', 'src.or3.carm': '4K', 'src.or3.roomcam': 'HD', 'src.or3.pacs': 'HD' };
+  const clinical = room.sources.filter((s) => s.id in CLINICAL);
+  check('4 clinical sources: 2×4K + 2×HD', clinical.length === 4 && clinical.every((s) => s.format === CLINICAL[s.id]),
+    clinical.map((s) => `${s.id}(${s.format})`).join(' ') || 'none of the canonical clinical ids present');
   check('streamer device present', room.devices.some((d) => d.kind === 'streamer'));
 } catch (error) {
   check('room rig readable', false, String(error.message ?? error));
