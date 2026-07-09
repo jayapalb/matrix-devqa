@@ -40,9 +40,12 @@ make register-shell-apps
 
 drives the real matrix-shell `registry-app-host` module (no Electron) against
 the live registry: the shell enrolls and registers as kind `shell` carrying
-its actual micro-app manifests — they appear in the Planner's Apps tab fleet
-panel under host `shell.or-03` as "UI — via the shell", with no command
-endpoint and no display claims. 11 assertions; `TRUTH HOLDS` on success.
+its actual micro-app manifests (11 apps — including the plan-vocabulary five:
+checklist, telestration, pacs, endo, conferencing). They appear in the
+Planner's Apps tab fleet panel under host `shell.or-03` as "UI — via the
+shell", with no command endpoint and no display claims. Add `--import` to
+also run the Planner import and assert the authored 'shell' host sentinels
+upgrade to the discovered deviceId. `TRUTH HOLDS` on success.
 
 Stop everything with `make down`. Full stack (shell/campaign devices too) is
 `make up`; the story gates are `make surgery` and `make chaos` (need `make up`).

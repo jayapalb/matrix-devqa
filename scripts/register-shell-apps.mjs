@@ -99,5 +99,28 @@ check(!apiRow, 'shell is NOT listed as a headless device API');
 const streamerRow = (live.apis ?? []).find((a) => a.kind === 'streamer');
 check(!!streamerRow, 'headless device APIs still present (streamer)', streamerRow?.deviceId);
 
+// 6) --import: close the loop in the planner — the room's authored 'shell'
+//    host sentinels upgrade to the DISCOVERED deviceId (truth gets more
+//    specific), and a device-reported host is never overwritten. Mutates the
+//    room (adds newly discovered apps, enabled — room policy can toggle off),
+//    so it is opt-in.
+const VOCAB = ['checklist', 'telestration', 'pacs', 'endo', 'conferencing'];
+if (process.argv.includes('--import')) {
+  const room = await getJson(`${PLANNER}/api/rooms/${ROOM}`);
+  const imported = await fetch(`${PLANNER}/api/rooms/${ROOM}/import-live-inventory?include=apps`, {
+    method: 'POST',
+    headers: { 'if-match': `"${room.rev}"`, accept: 'application/json' },
+  }).then((r) => r.json());
+  check(imported.ok === true, 'planner import accepted', `added ${imported.added?.apps?.length ?? 0} · upgraded ${imported.upgraded?.appHosts?.length ?? 0}`);
+  const upgraded = new Set(imported.upgraded?.appHosts ?? []);
+  check(VOCAB.every((id) => upgraded.has(id) || (imported.room?.apps ?? []).find((a) => a.id === id)?.host === SHELL_DEVICE_ID),
+    `plan-vocabulary hosts upgraded 'shell' → ${SHELL_DEVICE_ID}`, [...upgraded].join(', ') || 'already upgraded');
+  const vitals = (imported.room?.apps ?? []).find((a) => a.id === 'or-vitals-status');
+  check(vitals?.host === 'agent.windows-or03', 'device-reported host NEVER overwritten (or-vitals-status stays on the PC)');
+  const after = await getJson(`${PLANNER}/api/rooms/${ROOM}/live-inventory`);
+  const stillNew = (after.apps ?? []).filter((p) => p.status === 'new').length;
+  check(stillNew === 0, 'after import, every discovered app is known', `${(after.apps ?? []).length} apps, 0 new`);
+}
+
 console.log(failures === 0 ? '\nSHELL APP REGISTRATION: TRUTH HOLDS' : `\n${failures} assertion(s) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
