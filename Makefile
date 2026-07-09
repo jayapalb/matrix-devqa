@@ -107,6 +107,9 @@ smoke:
 smoke-planner: ## Assert the up-planner stack: HTTP surfaces, adaptors online, live inventory, demo-rig spec
 	node scripts/smoke-planner.mjs
 
+register-shell-apps: ## Drive the REAL shell registry-app-host module against the live stack (its micro-apps become discovered inventory)
+	node scripts/register-shell-apps.mjs
+
 shell: ## Launch the native Electron shell wired to this stack (window opens on your screen)
 	cd ../matrix-shell && npm run dev
 

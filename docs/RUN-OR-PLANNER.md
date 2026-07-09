@@ -32,6 +32,18 @@ planner's live-inventory chain, and that OR-03 carries the demo rig exactly
 as specced (2× MNA-420 quad decoders · PC 4K+HD · 4 sources 2×4K+2×HD ·
 streamer). Non-zero exit = the saved setup no longer holds.
 
+Optionally, make the SHELL a discovered fleet member too:
+
+```
+make register-shell-apps
+```
+
+drives the real matrix-shell `registry-app-host` module (no Electron) against
+the live registry: the shell enrolls and registers as kind `shell` carrying
+its actual micro-app manifests — they appear in the Planner's Apps tab fleet
+panel under host `shell.or-03` as "UI — via the shell", with no command
+endpoint and no display claims. 11 assertions; `TRUTH HOLDS` on success.
+
 Stop everything with `make down`. Full stack (shell/campaign devices too) is
 `make up`; the story gates are `make surgery` and `make chaos` (need `make up`).
 
