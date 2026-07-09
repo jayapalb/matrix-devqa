@@ -106,7 +106,14 @@ beat('Preflight — the room is standing');
 const topology = (await getJson(`${HOSTS.registry}/api/sites/${SITE}/rooms/${ROOM}/topology`)).topology;
 const online = topology.devices.filter((d) => d.presence.state === 'online');
 check('registry topology has the full fleet online (incl. docked cart)', online.length >= 8, `${online.length} online`);
-check('presence is broker-truth (lwt)', online.every((d) => d.presence.via === 'lwt'));
+// Broker-truth (MQTT LWT) is the liveness bar for COMMANDABLE devices — you
+// must never command a corpse. A non-commandable host (the shell: registers
+// its apps only, NO command endpoint, HTTP lease renewal) is legitimately
+// online via its lease — and must never masquerade as lwt.
+const commandable = online.filter((d) => d.endpoint?.url);
+check('presence is broker-truth (lwt) on every commandable device', commandable.length >= 8 && commandable.every((d) => d.presence.via === 'lwt'), `${commandable.length} commandable`);
+const hosts = online.filter((d) => !d.endpoint?.url);
+check('non-commandable hosts carry lease presence, never fake lwt', hosts.every((d) => d.presence.via !== 'lwt'), hosts.map((d) => `${d.deviceId}(${d.presence.via})`).join(' ') || 'none registered');
 const simHealth = await getJson(`${HOSTS.sim}/health`);
 check('vendor NMS (sim) reachable with an events subscriber', simHealth.ok && simHealth.subscribers >= 1);
 const barcoHealth = await getJson(`${HOSTS.barco}/health`, readHeaders());
