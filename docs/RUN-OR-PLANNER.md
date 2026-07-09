@@ -47,6 +47,10 @@ shell", with no command endpoint and no display claims. Add `--import` to
 also run the Planner import and assert the authored 'shell' host sentinels
 upgrade to the discovered deviceId. `TRUTH HOLDS` on success.
 
+(With the wiring landed, the script is optional for demos: `make shell` —
+the real Electron shell — now registers itself the moment it boots, with
+`MATRIX_DEVICE_REGISTRY_URL` set; see `make shell-env`.)
+
 Stop everything with `make down`. Full stack (shell/campaign devices too) is
 `make up`; the story gates are `make surgery` and `make chaos` (need `make up`).
 

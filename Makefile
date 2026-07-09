@@ -120,6 +120,7 @@ shell-env:
 	@echo "export MATRIX_AUDIT_URL=http://localhost:$${AUDIT_PORT:-4460}"
 	@echo "export MATRIX_BARCO_AGENT_URL=http://localhost:$${BARCO_PORT:-4550}"
 	@echo "export MATRIX_SNAPSHOT_TRUST=warn"
+	@echo "export MATRIX_DEVICE_REGISTRY_URL=http://localhost:$${REGISTRY_PORT:-4430}"  # shell self-registers as an app HOST
 	@echo "# Room identity: matrix-shell/.env is pre-wired; or import certs/.../OR-03/room-auth.json in Shell Settings."
 
 clean: down
