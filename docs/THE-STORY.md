@@ -83,7 +83,10 @@ from last month that survived because tuning patches are non-destructive.
 Earlier that week she did the room's housekeeping, and the setup pages told
 her **fleet truth**: on **Devices**, **Sources**, and **Apps** alike, the
 left column is what the registry *discovers* right now — **grouped by the
-PROVIDER that registers it**, because endpoints never register themselves: the
+DEVICE ADAPTOR that provides it** (the Devices tab lists the adaptors
+themselves; selecting one enumerates everything it exposes — displays,
+feeds, audio channels, hosted apps, capabilities), because endpoints never
+register themselves: the
 Nexxis router's decoders and encoder feeds live under the router, the room
 PC's monitors and hosted apps under the PC, and when a provider drops, its
 whole group goes with it (you cannot have the Barco display without the Barco
