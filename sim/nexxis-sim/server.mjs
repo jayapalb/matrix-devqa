@@ -31,6 +31,44 @@ const shares = new Map(); // sourceId → Set(roomId)
 const availability = new Map(); // videoSourceId → 'available' | 'unavailable'
 const log = (m) => console.log(`[nexxis-sim] ${m}`);
 
+// ---- vendor device rig (NMS GraphQL discovery surface) ----------------------
+// The rig the GraphQL endpoint reports — shaped like the Nexxis 2.0.0 API
+// (videoSinks: videoSignal timing / capabilities.maxAllowedSlots /
+// displayInfo.model). Override with NEXXIS_RIG (JSON, same shape). The
+// barco-agent DISCOVERS these facts live; its commissioning only maps vendor
+// ids to planner ids.
+const DEFAULT_RIG = {
+  videoSinks: [
+    {
+      id: 'DEC-MAIN', friendlyName: 'Main Decoder', connected: true, licensed: true,
+      displayInfo: { model: 'Barco MDSC-8527 (MNA-420)' },
+      capabilities: { maxAllowedSlots: 4 },
+      videoSinkSettings: { videoSignal: { currentTiming: { resolution: { width: 3840, height: 2160 } }, edid: { resolution: { width: 3840, height: 2160 } } } },
+    },
+    {
+      id: 'DEC-AUX', friendlyName: 'Aux Decoder', connected: true, licensed: true,
+      displayInfo: { model: 'Barco MDSC-8527 (MNA-420)' },
+      capabilities: { maxAllowedSlots: 4 },
+      videoSinkSettings: { videoSignal: { currentTiming: { resolution: { width: 3840, height: 2160 } }, edid: { resolution: { width: 3840, height: 2160 } } } },
+    },
+  ],
+  videoSources: [
+    { id: 'ENC-SCOPE', friendlyName: 'Arthroscope Encoder', connected: true },
+    { id: 'ENC-CARM', friendlyName: 'C-arm Encoder', connected: true },
+    { id: 'ENC-PACS', friendlyName: 'PACS Encoder', connected: true },
+    { id: 'ENC-ROOMCAM', friendlyName: 'Room Camera Encoder', connected: true },
+  ],
+  audioSinks: [{ id: 'AUD-ROOM', friendlyName: 'Room Speakers', connected: true }],
+  audioSources: [
+    { id: 'AUD-MUSIC', friendlyName: 'Music Playback', connected: true },
+    { id: 'AUD-MIC', friendlyName: 'Headset Microphone', connected: true },
+  ],
+};
+const rig = (() => {
+  try { return process.env.NEXXIS_RIG ? JSON.parse(process.env.NEXXIS_RIG) : DEFAULT_RIG; }
+  catch { log('NEXXIS_RIG parse failed — using default rig'); return DEFAULT_RIG; }
+})();
+
 // ---- WebSocket server (text frames out; tolerate pings/close in) ------------
 const clients = new Set(); // {socket, filters:Set|null}
 
@@ -110,6 +148,16 @@ const server = http.createServer(async (request, response) => {
         shares: [...shares.entries()].map(([sourceId, rooms]) => ({ sourceId, rooms: [...rooms] })),
         availability: Object.fromEntries(availability),
       });
+    }
+    if (request.method === 'POST' && path === '/graphql') {
+      // Minimal GraphQL: return each requested root from the rig (the
+      // discovery query is a plain selection — no variables, no fragments).
+      const query = String(body.query ?? '');
+      const data = {};
+      for (const root of ['videoSinks', 'videoSources', 'audioSinks', 'audioSources']) {
+        if (query.includes(root)) data[root] = rig[root] ?? [];
+      }
+      return sendJson(response, 200, { data });
     }
     if (request.method !== 'POST') return sendJson(response, 404, { ok: false, error: 'not found' });
 
