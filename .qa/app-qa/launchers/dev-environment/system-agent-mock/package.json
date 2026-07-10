@@ -1,0 +1,11 @@
+{
+  "name": "system-agent-mock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free mock of the linux 'system (with displays)' device agent for the dev environment.",
+  "main": "agent.mjs",
+  "scripts": {
+    "start": "node agent.mjs"
+  }
+}

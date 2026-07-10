@@ -1,0 +1,352 @@
+# Matrix+ full development environment — everything in Docker.
+#
+# Brought up by the `dev-environment` Touchstone launcher (../dev-environment.mjs), or by hand:
+#   docker compose -f docker-compose.yml up -d --build
+#   docker compose -f docker-compose.yml down -v
+#
+# Build contexts point at the sibling app repos (../../../../../matrix-*). We keep those repos
+# untouched by declaring each image inline (dockerfile_inline) and mounting the only helper
+# scripts we add (shell entrypoint, mosquitto conf) as read-only volumes.
+#
+# Topology (service name = in-network hostname):
+#   mosquitto:1883        MQTT broker (presence / events, L2)
+#   device-registry:4430  matrix-device-registry (fleet)
+#   planner-api:4500      matrix-planner control plane (rooms/plans/preference cards)
+#   ehr-adapter:4600      planner ehr-adapter  -> "EHR for cases" worklist
+#   planner-web:5500      planner authoring UI (Vite)
+#   audit:4460            matrix-audit-service
+#   app-store:4410        matrix-app-store (serves the shell's micro-apps)
+#   barco-agent:4550      device agent: Barco/Nexxis routing
+#   streaming-agent:4585  device agent: streaming (mock)
+#   system-agent:5050     device agent: system w/ displays (mock of linux-agent)
+#   registrar-*           sidecars that register each agent into the fleet
+#   shell:6080            matrix-shell Electron app, viewable over noVNC
+
+name: matrix-dev
+
+x-agents-build: &agents-build
+  context: ../../../../../matrix-device-agents
+  dockerfile_inline: |
+    FROM node:20-bookworm-slim
+    WORKDIR /app
+    COPY . /app
+    ENV NODE_ENV=development
+
+x-hc: &hc
+  interval: 10s
+  timeout: 5s
+  retries: 24
+  start_period: 40s
+
+networks:
+  matrix:
+    driver: bridge
+
+volumes:
+  registry-data:
+  planner-data:
+
+services:
+  # ---- infrastructure ---------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2
+    networks: [matrix]
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "hc", "-W", "3"]
+      <<: *hc
+
+  # ---- fleet registry ---------------------------------------------------------------
+  device-registry:
+    image: matrix-dev/device-registry
+    build:
+      context: ../../../../../matrix-device-registry
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim
+        WORKDIR /app
+        COPY . /app
+        RUN npm install --omit=dev --no-audit --no-fund
+        CMD ["node", "src/server.cjs"]
+    networks: [matrix]
+    ports: ["4430:4430"]
+    environment:
+      MATRIX_DEVICE_REGISTRY_PORT: "4430"
+      MATRIX_DEVICE_REGISTRY_DATA_DIR: /data
+      BROKER_URL: mqtt://mosquitto:1883
+    volumes:
+      - registry-data:/data
+    depends_on:
+      mosquitto: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4430/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  # ---- planner (api + ehr-adapter + web share one image) ----------------------------
+  planner-api:
+    image: matrix-dev/planner
+    build:
+      context: ../../../../../matrix-planner
+      dockerfile_inline: |
+        FROM node:22-bookworm-slim
+        WORKDIR /app
+        COPY . /app
+        RUN npm install --no-audit --no-fund
+        ENV NODE_ENV=development
+    networks: [matrix]
+    ports: ["4500:4500"]
+    environment:
+      MATRIX_PLANNER_PORT: "4500"
+      MATRIX_PLANNER_DB: /data/db.json
+      MATRIX_DATA_DIR: /data
+      EHR_ADAPTER_URL: http://ehr-adapter:4600
+      MATRIX_AUDIT_URL: http://audit:4460
+      MATRIX_DEVICE_REGISTRY_URL: http://device-registry:4430
+      MATRIX_AUTH_MODE: "off"
+    volumes:
+      - planner-data:/data
+    command: ["sh", "-c", "test -f /data/db.json || npm run seed -w @matrix/api || true; npm run start -w @matrix/api"]
+    depends_on:
+      device-registry: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+      start_period: 90s
+
+  ehr-adapter:
+    image: matrix-dev/planner
+    networks: [matrix]
+    ports: ["4600:4600"]
+    environment:
+      EHR_ADAPTER_PORT: "4600"
+    command: ["npm", "run", "start", "-w", "@matrix/ehr-adapter"]
+    depends_on:
+      planner-api: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4600/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  planner-web:
+    image: matrix-dev/planner
+    networks: [matrix]
+    ports: ["5500:5500"]
+    environment:
+      VITE_API_PROXY: http://planner-api:4500
+    command: ["npm", "run", "dev", "-w", "@matrix/web", "--", "--host", "0.0.0.0", "--port", "5500"]
+    depends_on:
+      planner-api: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5500/').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  # ---- audit + app store ------------------------------------------------------------
+  audit:
+    image: matrix-dev/audit
+    build:
+      context: ../../../../../matrix-audit-service
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim
+        WORKDIR /app
+        COPY . /app
+        RUN npm install --omit=dev --no-audit --no-fund
+        CMD ["node", "server.cjs"]
+    networks: [matrix]
+    ports: ["4460:4460"]
+    environment:
+      AUDIT_SERVICE_PORT: "4460"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4460/').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  app-store:
+    image: matrix-dev/app-store
+    build:
+      context: ../../../../../matrix-app-store
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim
+        WORKDIR /app
+        COPY . /app
+        CMD ["node", "server.mjs"]
+    networks: [matrix]
+    ports: ["4410:4410"]
+    environment:
+      PORT: "4410"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4410/').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  # ---- device agents ----------------------------------------------------------------
+  barco-agent:
+    image: matrix-dev/device-agents
+    build: *agents-build
+    working_dir: /app/barco-agent
+    command: ["node", "server.mjs"]
+    networks: [matrix]
+    ports: ["4550:4550"]
+    environment:
+      PORT: "4550"
+      DEVICE_ID: barco-nexxis-01
+      DEVICE_LABEL: Barco Nexxis (dev)
+      DISCOVERY_URL: http://device-registry:4430
+      BROKER_URL: mqtt://mosquitto:1883
+      AGENT_TOKEN: dev-agent-token
+    depends_on:
+      device-registry: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4550/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  streaming-agent:
+    image: matrix-dev/device-agents
+    working_dir: /app/streaming-agent-mock
+    command: ["node", "agent.mjs"]
+    networks: [matrix]
+    ports: ["4585:4585"]
+    environment:
+      PORT: "4585"
+      DEVICE_ID: streamer-01
+      DEVICE_LABEL: Streaming Encoder (dev)
+      DISCOVERY_URL: http://device-registry:4430
+      BROKER_URL: mqtt://mosquitto:1883
+      MATRIX_SIM_HARDWARE: "true"
+      # Unlike barco-agent (server.mjs) / system-agent (bespoke mock), the
+      # streamer is a full @matrix/agent-sdk agent — it is room-scoped and
+      # needs a room-auth key to boot. Demo key for SITE-001/OR-03; unsigned
+      # is fine because this launcher's registry runs default 'permissive'.
+      ROOM_AUTH_FILE: /certs/room-auth.json
+      MATRIX_ALLOW_UNSIGNED: "true"
+    volumes:
+      - ./certs/site-cert-package/operating-rooms/OR-03/room-auth.json:/certs/room-auth.json:ro
+    depends_on:
+      device-registry: { condition: service_healthy }
+      barco-agent: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4585/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  system-agent:
+    image: matrix-dev/system-agent-mock
+    build:
+      context: ./system-agent-mock
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim
+        WORKDIR /app
+        COPY . /app
+        CMD ["node", "agent.mjs"]
+    networks: [matrix]
+    ports: ["5050:5050"]
+    environment:
+      PORT: "5050"
+      DEVICE_ID: system-or03-01
+      DEVICE_LABEL: OR-03 System (dev mock)
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5050/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+
+  # ---- registrar sidecars: register each agent into the fleet -----------------------
+  registrar-barco:
+    image: matrix-dev/device-agents
+    working_dir: /app/registrar
+    command: ["node", "register-agent.mjs"]
+    networks: [matrix]
+    environment:
+      AGENT_URL: http://barco-agent:4550
+      AGENT_TOKEN: dev-agent-token
+      DISCOVERY_URL: http://device-registry:4430
+      SITE_ID: SITE-001
+      ROOM_ID: OR-03
+      DEVICE_ID: barco-nexxis-01
+      DEVICE_LABEL: Barco Nexxis (dev)
+    depends_on:
+      barco-agent: { condition: service_healthy }
+    restart: unless-stopped
+
+  registrar-streaming:
+    image: matrix-dev/device-agents
+    working_dir: /app/registrar
+    command: ["node", "register-agent.mjs"]
+    networks: [matrix]
+    environment:
+      AGENT_URL: http://streaming-agent:4585
+      DISCOVERY_URL: http://device-registry:4430
+      SITE_ID: SITE-001
+      ROOM_ID: OR-03
+      DEVICE_ID: streamer-01
+      DEVICE_LABEL: Streaming Encoder (dev)
+    depends_on:
+      streaming-agent: { condition: service_healthy }
+    restart: unless-stopped
+
+  registrar-system:
+    image: matrix-dev/device-agents
+    working_dir: /app/registrar
+    command: ["node", "register-agent.mjs"]
+    networks: [matrix]
+    environment:
+      AGENT_URL: http://system-agent:5050
+      DISCOVERY_URL: http://device-registry:4430
+      SITE_ID: SITE-001
+      ROOM_ID: OR-03
+      DEVICE_ID: system-or03-01
+      DEVICE_LABEL: OR-03 System (dev mock)
+    depends_on:
+      system-agent: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ---- matrix-shell (Electron over noVNC) -------------------------------------------
+  shell:
+    image: matrix-dev/shell
+    build:
+      context: ../../../../../matrix-shell
+      dockerfile_inline: |
+        FROM node:20-bookworm
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+              xvfb x11vnc novnc websockify wmctrl xdotool ca-certificates \
+              libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+              libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+              libasound2 libpango-1.0-0 libcairo2 libgtk-3-0 libx11-xcb1 libxshmfence1 \
+          && rm -rf /var/lib/apt/lists/*
+        WORKDIR /app
+        COPY . /app
+        RUN npm install --no-audit --no-fund && npm run build:main
+        ENV NODE_ENV=development
+    networks: [matrix]
+    ports:
+      - "6080:6080"   # noVNC  -> open http://localhost:6080/vnc.html
+      - "4786:4786"   # LiveKit support-token server
+    environment:
+      # backends (in-network hostnames)
+      MATRIX_DEVICE_REGISTRY_URL: http://device-registry:4430
+      MATRIX_PLANNER_URL: http://planner-api:4500
+      MATRIX_CASE_WORKLIST_URL: http://planner-api:4500/api/worklist?roomId=OR-03
+      MATRIX_APP_STORE_URL: http://app-store:4410
+      MATRIX_AUDIT_URL: http://audit:4460
+      MATRIX_BARCO_AGENT_URL: http://barco-agent:4550
+      MATRIX_AGENT_TOKEN: dev-agent-token
+      MATRIX_BARCO_AGENT_TOKEN: dev-agent-token
+      # shell identity + dev behaviour
+      MATRIX_SITE_NAME: Dev Site
+      MATRIX_SITE_CODE: DEV
+      MATRIX_ID: MATRIX-DEV-01
+      MATRIX_NAME: Dev Matrix Shell
+      MATRIX_SECURITY_PROFILE: demo
+      MATRIX_DEV_LOCAL_APPS: "true"
+      MATRIX_TRUSTED_SELF_SIGNED_HOSTS: "*"
+      # support-token server
+      SUPPORT_SERVER_PORT: "4786"
+      SUPPORT_ALLOW_ORIGIN: "*"
+      LIVEKIT_URL: ""
+      LIVEKIT_API_KEY: ""
+      LIVEKIT_API_SECRET: ""
+    volumes:
+      - ./shell/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
+    command: ["bash", "/usr/local/bin/entrypoint.sh"]
+    depends_on:
+      device-registry: { condition: service_healthy }
+      planner-api: { condition: service_started }
+      app-store: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:6080/').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      <<: *hc
+      start_period: 120s

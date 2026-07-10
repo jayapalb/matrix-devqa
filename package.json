@@ -1,24 +1,26 @@
 {
-  "name": "matrix-or-qa",
-  "version": "0.0.0",
+  "name": "matrix-devqa-qa",
   "private": true,
-  "type": "module",
-  "description": "Touchstone QA host for the Matrix Plus simulated OR — the multi-case, chaos-woven procedure campaign.",
+  "description": "Touchstone QA host — hosts the Node test toolchain so your app repo stays clean.",
   "scripts": {
-    "qa": "playwright test -c .qa/playwright.config.mjs",
-    "qa:campaign": "playwright test -c .qa/playwright.config.mjs --grep @campaign",
-    "qa:smoke": "playwright test -c .qa/playwright.config.mjs --grep @smoke",
-    "qa:doctor": "node node_modules/touchstone/cli.mjs doctor",
-    "qa:shell": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @shellui",
-    "qa:planner": "QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep \"@a11y|@ux\"",
-    "qa:fuzz": "QA_EPHEMERAL_USERDATA=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @fuzz",
-    "qa:soak": "QA_SOAK=true QA_SKIP_EXTERNAL=true playwright test -c .qa/playwright.config.mjs --grep @soak"
-  },
-  "dependencies": {
-    "touchstone": "github:jayapalb/touchstone#v0.8.1"
+    "qa": "touchstone qa",
+    "qa:report": "playwright show-report .qa/artifacts/latest/html",
+    "qa:coverage": "touchstone qa --coverage",
+    "qa:gallery": "touchstone qa --gallery",
+    "qa:analyze": "touchstone qa --analyze",
+    "qa:doctor": "touchstone doctor",
+    "qa:serve": "touchstone serve",
+    "qa:config": "touchstone config",
+    "qa:summary": "touchstone summary",
+    "qa:perf": "touchstone perf",
+    "qa:audit": "touchstone audit",
+    "qa:security-review": "touchstone security-review",
+    "qa:secrets": "touchstone secrets",
+    "qa:mutation": "touchstone mutation",
+    "qa:extenders": "node --test \".qa/app-qa/db/**/*.test.mjs\" \".qa/app-qa/scanners/**/*.test.mjs\" \".qa/app-qa/coverage/**/*.test.mjs\" \".qa/app-qa/signals/**/*.test.mjs\" \".qa/app-qa/launchers/**/*.test.mjs\" \".qa/app-qa/sinks/**/*.test.mjs\" \".qa/app-qa/evidence-gatherers/**/*.test.mjs\" \".qa/app-qa/mocks/**/*.test.mjs\" \".qa/app-qa/factories/**/*.test.mjs\" \".qa/app-qa/trackers/**/*.test.mjs\" \".qa/app-qa/strategies/**/*.test.mjs\" \".qa/app-qa/analyzers/**/*.test.mjs\""
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
-    "electron": "^38.4.0"
+    "@playwright/test": "^1.55.0",
+    "touchstone": "file:../../../.npm-global/lib/node_modules/touchstone"
   }
 }
